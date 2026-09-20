@@ -1,11 +1,9 @@
 # Prosecutor agent: finds injection/auth bugs in Python code,
 # searches Tavily for real-world precedent, writes an exploit/test.
 
-from openai import OpenAI
-
 import config
 
-client = OpenAI(base_url=config.NEBIUS_BASE_URL, api_key=config.NEBIUS_API_KEY)
+client = config.get_client(config.MODEL_PROSECUTOR)
 
 SYSTEM_PROMPT = """You are the Prosecutor in an adversarial code review "trial".
 You are given a Python source file. Your job is to find injection bugs
