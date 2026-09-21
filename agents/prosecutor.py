@@ -50,15 +50,19 @@ def _get_search_query(source_code: str) -> str:
     return response.choices[0].message.content.strip()
 
 
-def _format_evidence(results: list[dict]) -> str:
-    if not results:
+def _format_evidence(search_result: dict) -> str:
+    answer = search_result.get("answer")
+    results = search_result.get("results") or []
+    if not answer and not results:
         return "No search results found."
+
     lines = []
-    for r in results:
-        title = r.get("title", "")
-        url = r.get("url", "")
-        snippet = (r.get("content") or "")[:300]
-        lines.append(f"- {title}: {url}\n  {snippet}")
+    if answer:
+        lines.append(f"Summary: {answer}")
+    if results:
+        lines.append("Sources:")
+        for r in results:
+            lines.append(f"- {r.get('title', '')}: {r.get('url', '')}")
     return "\n".join(lines)
 
 
@@ -68,8 +72,8 @@ def analyze(source_code: str) -> str:
     if query.upper() == "NONE":
         evidence_block = "No injection/auth vulnerability found; search skipped."
     else:
-        results = search_tool.search(query)
-        evidence_block = _format_evidence(results)
+        search_result = search_tool.search(query)
+        evidence_block = _format_evidence(search_result)
 
     user_content = (
         f"Here is the code to review:\n\n```python\n{source_code}\n```\n\n"
