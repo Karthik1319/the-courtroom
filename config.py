@@ -7,6 +7,9 @@ load_dotenv()
 
 NEBIUS_API_KEY = os.environ["NEBIUS_API_KEY"]
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+NEBIUS_PROJECT_ID = os.environ["NEBIUS_PROJECT_ID"]
+
+SANDBOX_BASE_URL = "https://api.tokenfactory.nebius.com/sandboxes/v1"
 
 # Per Nebius Token Factory's documented per-model endpoints: Ultra and Super
 # require the us-central1 regional URL; Nano uses the global URL.
