@@ -84,3 +84,46 @@ def patch(source_code: str, prosecutor_analysis: str) -> dict:
         "sandbox_result": sandbox_result,
         "raw_response": raw,
     }
+
+
+# --- v2: lean patch for the rounds loop -----------------------------------
+# The harness grades the patch now (replays the whole exploit suite in the
+# sandbox), so the Defense no longer writes or runs its own test. It just
+# returns a drop-in patched source; courtroom.run_case decides if it holds.
+
+PATCH_ONLY_PROMPT = """You are the Defense in an adversarial code review "trial".
+You are given the current Python source code and a list of attack scripts that
+currently extract a planted secret from it. Produce a corrected, drop-in
+replacement for the WHOLE source file that fixes the underlying
+vulnerabilities so those attacks no longer work, while keeping every function
+and class name and signature identical and all normal behaviour intact.
+
+Respond with ONLY one fenced Python code block containing the full patched
+source, and no text outside it.
+"""
+
+
+def _extract_code_block(text: str) -> str:
+    match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
+    return match.group(1).strip() if match else text.strip()
+
+
+def write_patch(current_code: str, exploits: list[str]) -> str:
+    """Return a single patched-source candidate for courtroom.run_case.
+
+    No self-grading: the harness verifies it. `exploits` are the attack scripts
+    that currently succeed, given only as context for what to fix.
+    """
+    exploit_block = "\n\n".join(f"# attack {i + 1}\n{e}" for i, e in enumerate(exploits))
+    user_content = (
+        f"Current source code:\n\n```python\n{current_code}\n```\n\n"
+        f"Attacks that currently succeed against it:\n\n```python\n{exploit_block}\n```"
+    )
+    response = client.chat.completions.create(
+        model=config.MODEL_DEFENSE,
+        messages=[
+            {"role": "system", "content": PATCH_ONLY_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    return _extract_code_block(response.choices[0].message.content)
