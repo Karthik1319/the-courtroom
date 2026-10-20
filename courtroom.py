@@ -36,6 +36,11 @@ class CaseResult:
     final_code: str
     exploit_suite: list = field(default_factory=list)  # scripts that extracted the flag
     rounds: list = field(default_factory=list)          # list[RoundRecord]
+    # patch-outcome tallies across the whole case (for the eval table)
+    patches_accepted: int = 0
+    patches_rejected_naive: int = 0       # ran + kept behaviour but didn't block all exploits
+    patches_rejected_behaviour: int = 0   # broke a normal-behaviour test
+    patches_rejected_crash: int = 0       # didn't even run
 
 
 def brief_lines(exploit_suite):
@@ -100,6 +105,7 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
     exploit_suite = []
     rounds = []
     status = MAX_ROUNDS
+    tally = {"accepted": 0, "naive": 0, "behaviour": 0, "crash": 0}
 
     for n in range(1, max_rounds + 1):
         t = harness.Target(name=f"round{n}", source_code=current,
@@ -124,10 +130,18 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
         # Defense panel: a patch is accepted only if it clears every gate
         # (blocks the WHOLE exploit suite, keeps behaviour, runs).
         patches = defend(current, worked)  # list[(label, code)]
-        accepted = [
-            (label, code) for (label, code) in patches
-            if harness.check_patch(code, exploit_suite, behaviour_tests).accepted
-        ]
+        accepted = []
+        for label, code in patches:
+            gates = harness.check_patch(code, exploit_suite, behaviour_tests)
+            if gates.accepted:
+                accepted.append((label, code))
+                tally["accepted"] += 1
+            elif not gates.runs_without_crash:
+                tally["crash"] += 1
+            elif not gates.passes_behaviour:
+                tally["behaviour"] += 1   # a fix that broke a normal feature
+            else:
+                tally["naive"] += 1       # ran + kept behaviour but didn't block all exploits
 
         # Stop: a real vulnerability with no patch that holds.
         if not accepted:
@@ -145,4 +159,8 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
                                   winning_model=best_label))
 
     return CaseResult(status, _verdict(status, exploit_suite),
-                      source_code, current, exploit_suite, rounds)
+                      source_code, current, exploit_suite, rounds,
+                      patches_accepted=tally["accepted"],
+                      patches_rejected_naive=tally["naive"],
+                      patches_rejected_behaviour=tally["behaviour"],
+                      patches_rejected_crash=tally["crash"])
