@@ -35,9 +35,10 @@ def prosecute(current_code: str, brief: str) -> list[str]:
     return out if isinstance(out, list) else [out]
 
 
-def defend(current_code: str, exploits: list[str]) -> list[str]:
-    """Defense panel. One candidate for now; mixed-model panel is the next step."""
-    return [defense.write_patch(current_code, exploits)]
+def defend(current_code: str, exploits: list[str]) -> list[tuple[str, str]]:
+    """Defense panel: each model in config.DEFENSE_PANEL_MODELS writes a patch
+    candidate in parallel; run_case keeps the best one that clears the gates."""
+    return defense.write_patch_panel(current_code, exploits)
 
 
 # --- scoreboard -----------------------------------------------------------
@@ -47,12 +48,14 @@ def _print_scoreboard(result: courtroom.CaseResult) -> None:
     print("=" * 64)
     print(" THE COURTROOM: APPEALS — SCOREBOARD")
     print("=" * 64)
-    header = f"{'round':>5} | {'attacks':>7} | {'worked':>6} | {'new':>3} | {'patches':>7} | accepted"
+    header = (f"{'round':>5} | {'attacks':>7} | {'worked':>6} | {'new':>3} | "
+              f"{'patches':>7} | {'accepted':>8} | winner")
     print(header)
     print("-" * len(header))
     for r in result.rounds:
         print(f"{r.number:>5} | {r.attacks_tried:>7} | {r.attacks_worked:>6} | "
-              f"{r.new_exploits:>3} | {r.patches_tried:>7} | {'yes' if r.patch_accepted else 'no'}")
+              f"{r.new_exploits:>3} | {r.patches_tried:>7} | "
+              f"{('yes' if r.patch_accepted else 'no'):>8} | {r.winning_model}")
     print("-" * len(header))
     print(f"status         : {result.status}")
     print(f"exploits found : {len(result.exploit_suite)}")

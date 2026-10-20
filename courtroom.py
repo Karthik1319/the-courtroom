@@ -25,6 +25,7 @@ class RoundRecord:
     new_exploits: int
     patches_tried: int
     patch_accepted: bool
+    winning_model: str = ""   # label of the panel model whose patch was adopted
 
 
 @dataclass
@@ -52,13 +53,13 @@ def brief_lines(exploit_suite):
     return "\n".join(lines)
 
 
-def _smallest_diff(candidates, current):
-    """Among gate-passing patches, prefer the smallest change from current code.
+def _best(accepted, current):
+    """Among gate-passing (label, code) patches, prefer the smallest change.
 
     Placeholder ranking: later steps add cross-examination, payload fuzzing and
     Bandit before falling back to diff size.
     """
-    return min(candidates, key=lambda c: abs(len(c) - len(current)))
+    return min(accepted, key=lambda lc: abs(len(lc[1]) - len(current)))
 
 
 def _verdict(status, exploit_suite):
@@ -77,8 +78,8 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
 
     prosecute(current_code: str, brief: str) -> list[str]
         Returns candidate attack scripts (each uses the harness `call()` channel).
-    defend(current_code: str, exploits: list[str]) -> list[str]
-        Returns candidate patched-code strings (drop-in replacements).
+    defend(current_code: str, exploits: list[str]) -> list[tuple[str, str]]
+        Returns candidate (model_label, patched_code) pairs from the panel.
 
     Returns a CaseResult.
     """
@@ -121,10 +122,10 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
 
         # Defense panel: a patch is accepted only if it clears every gate
         # (blocks the WHOLE exploit suite, keeps behaviour, runs).
-        patches = defend(current, worked)
+        patches = defend(current, worked)  # list[(label, code)]
         accepted = [
-            p for p in patches
-            if harness.check_patch(p, exploit_suite, behaviour_tests).accepted
+            (label, code) for (label, code) in patches
+            if harness.check_patch(code, exploit_suite, behaviour_tests).accepted
         ]
 
         # Stop: a real vulnerability with no patch that holds.
@@ -136,9 +137,11 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
 
         # Appeal: adopt the best surviving patch and let prosecution attack it
         # again next round.
-        current = _smallest_diff(accepted, current)
+        best_label, best_code = _best(accepted, current)
+        current = best_code
         rounds.append(RoundRecord(n, len(attacks), len(worked),
-                                  new_exploits, len(patches), True))
+                                  new_exploits, len(patches), True,
+                                  winning_model=best_label))
 
     return CaseResult(status, _verdict(status, exploit_suite),
                       source_code, current, exploit_suite, rounds)

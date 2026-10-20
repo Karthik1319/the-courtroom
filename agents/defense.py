@@ -2,12 +2,22 @@
 # re-runs the exploit/test in the sandbox to prove the fix holds.
 
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import config
 import tools.sandbox as sandbox_tool
 from tools.parsing import extract_code_block
 
 client = config.get_client(config.MODEL_DEFENSE)
+
+# One client per model (each model may need a different base URL), built lazily.
+_clients = {config.MODEL_DEFENSE: client}
+
+
+def _client_for(model: str):
+    if model not in _clients:
+        _clients[model] = config.get_client(model)
+    return _clients[model]
 
 SYSTEM_PROMPT = """You are the Defense in an adversarial code review "trial".
 You are given the original Python source code and the Prosecutor's findings,
@@ -104,8 +114,8 @@ source, and no text outside it.
 """
 
 
-def write_patch(current_code: str, exploits: list[str]) -> str:
-    """Return a single patched-source candidate for courtroom.run_case.
+def write_patch(current_code: str, exploits: list[str], model: str = config.MODEL_DEFENSE) -> str:
+    """Return a single patched-source candidate from `model`.
 
     No self-grading: the harness verifies it. `exploits` are the attack scripts
     that currently succeed, given only as context for what to fix.
@@ -115,8 +125,8 @@ def write_patch(current_code: str, exploits: list[str]) -> str:
         f"Current source code:\n\n```python\n{current_code}\n```\n\n"
         f"Attacks that currently succeed against it:\n\n```python\n{exploit_block}\n```"
     )
-    response = client.chat.completions.create(
-        model=config.MODEL_DEFENSE,
+    response = _client_for(model).chat.completions.create(
+        model=model,
         max_tokens=config.MAX_OUTPUT_TOKENS,
         messages=[
             {"role": "system", "content": PATCH_ONLY_PROMPT},
@@ -124,3 +134,40 @@ def write_patch(current_code: str, exploits: list[str]) -> str:
         ],
     )
     return extract_code_block(response.choices[0].message.content)
+
+
+def _short(model: str) -> str:
+    """Short, scoreboard-friendly label for a model id."""
+    return model.split("/")[-1]
+
+
+def write_patch_panel(current_code: str, exploits: list[str], models=None) -> list[tuple[str, str]]:
+    """Run several models in parallel, each writing one patch candidate.
+
+    Returns a list of (model_label, patched_code), de-duplicated by code so two
+    models that produce identical patches collapse to one entry. A model that
+    errors or returns nothing is skipped. courtroom.run_case decides which of
+    these candidates (if any) actually clears the gates.
+    """
+    models = models or config.DEFENSE_PANEL_MODELS
+
+    def _one(model):
+        try:
+            return _short(model), write_patch(current_code, exploits, model=model)
+        except Exception:
+            return None
+
+    with ThreadPoolExecutor(max_workers=len(models)) as pool:
+        results = list(pool.map(_one, models))
+
+    candidates = []
+    seen_code = set()
+    for item in results:
+        if item is None:
+            continue
+        label, code = item
+        if not code or code in seen_code:
+            continue
+        seen_code.add(code)
+        candidates.append((label, code))
+    return candidates

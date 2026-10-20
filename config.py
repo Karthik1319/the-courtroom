@@ -21,6 +21,13 @@ MODEL_PROSECUTOR = "nvidia/nemotron-3-super-120b-a12b"
 MODEL_DEFENSE = "nvidia/nemotron-3-super-120b-a12b"
 MODEL_FORMATTER = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 
+# Defense panel: the models that each independently write a patch candidate
+# per round (run in parallel; run_case keeps the best one that clears the
+# gates). Super + Ultra give two different-strength reasoners. Nano is left
+# out (too weak to patch reliably) and Lightning until its base URL is
+# confirmed (see the open item in memory).
+DEFENSE_PANEL_MODELS = [MODEL_DEFENSE, MODEL_JUDGE]  # Super, Ultra
+
 # Ceiling on tokens a single agent call may emit. Nemotron reasoning models
 # spend output tokens on visible reasoning, so this caps runaway cost. It is a
 # safety ceiling, not a target — raise it if real runs show replies truncated
