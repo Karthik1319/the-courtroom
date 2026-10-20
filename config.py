@@ -28,6 +28,12 @@ MODEL_FORMATTER = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 # confirmed (see the open item in memory).
 DEFENSE_PANEL_MODELS = [MODEL_DEFENSE, MODEL_JUDGE]  # Super, Ultra
 
+# Supreme Court: three judges on DIFFERENT models each rate the severity of the
+# confirmed vulnerabilities and write an opinion (they never re-decide guilt —
+# that is computed deterministically). Different models give a real majority
+# vs dissent. Lightning excluded until its base URL is confirmed.
+JUDGE_PANEL_MODELS = [MODEL_JUDGE, MODEL_PROSECUTOR, MODEL_FORMATTER]  # Ultra, Super, Nano
+
 # Ceiling on tokens a single agent call may emit. Nemotron reasoning models
 # spend output tokens on visible reasoning, so this caps runaway cost. It is a
 # safety ceiling, not a target — raise it if real runs show replies truncated
