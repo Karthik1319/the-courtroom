@@ -89,3 +89,32 @@ def analyze(source_code: str) -> str:
         ],
     )
     return response.choices[0].message.content
+
+
+def write_attack(current_code: str, brief: str) -> list[str]:
+    """Produce candidate exploit scripts for one round of the Courtroom loop.
+
+    Called by main.prosecute each round. Fill in the attack-generation logic.
+
+    Args:
+        current_code: source of the app as it stands THIS round (it changes
+            after each accepted patch — attack the version you are given).
+        brief: one short line per already-known exploit (compact memory), so
+            this round can avoid repeating attacks already in the suite.
+
+    Returns:
+        A list of attack-script strings (a single string is also accepted;
+        main.prosecute wraps it into a list).
+
+    Contract each returned script MUST follow:
+        * The ONLY name in scope at runtime is `call(method, **kwargs)`, which
+          sends a request to the target app's server and returns its reply.
+        * Reach the planted secret ONLY through `call(...)`. Do not import
+          target_app, open files, or touch the DB — the oracle reads the
+          server's replies, so direct reads score nothing (anti-cheat).
+        * Printing is optional; a flag returned through `call` is detected
+          automatically.
+        * Notes may belong to other users, so enumerate ids (the demo app's
+          IDOR secret is at note id=2, not id=1).
+    """
+    raise NotImplementedError
