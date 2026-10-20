@@ -8,7 +8,7 @@
 
 from dataclasses import dataclass, field
 
-from tools import harness
+from tools import harness, scoring
 
 # ---- case outcomes --------------------------------------------------------
 CASE_CLOSED = "CASE_CLOSED"             # prosecution ran out of working attacks
@@ -54,12 +54,13 @@ def brief_lines(exploit_suite):
 
 
 def _best(accepted, current):
-    """Among gate-passing (label, code) patches, prefer the smallest change.
+    """Pick the best gate-passing (label, code) patch via tools.scoring.
 
-    Placeholder ranking: later steps add cross-examination, payload fuzzing and
-    Bandit before falling back to diff size.
+    Ranking signals (defensive): fewer Bandit findings, then smaller diff.
+    Cross-examination (next round's attacks) is handled by the appeal loop;
+    payload fuzzing is left to the attack side.
     """
-    return min(accepted, key=lambda lc: abs(len(lc[1]) - len(current)))
+    return scoring.rank(accepted, current)[0]
 
 
 def _verdict(status, exploit_suite):

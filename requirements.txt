@@ -2,3 +2,4 @@ python-dotenv
 openai
 tavily-python
 requests
+bandit
