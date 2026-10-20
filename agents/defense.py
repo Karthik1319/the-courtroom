@@ -5,6 +5,7 @@ import re
 
 import config
 import tools.sandbox as sandbox_tool
+from tools.parsing import extract_code_block
 
 client = config.get_client(config.MODEL_DEFENSE)
 
@@ -103,11 +104,6 @@ source, and no text outside it.
 """
 
 
-def _extract_code_block(text: str) -> str:
-    match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
-    return match.group(1).strip() if match else text.strip()
-
-
 def write_patch(current_code: str, exploits: list[str]) -> str:
     """Return a single patched-source candidate for courtroom.run_case.
 
@@ -121,9 +117,10 @@ def write_patch(current_code: str, exploits: list[str]) -> str:
     )
     response = client.chat.completions.create(
         model=config.MODEL_DEFENSE,
+        max_tokens=config.MAX_OUTPUT_TOKENS,
         messages=[
             {"role": "system", "content": PATCH_ONLY_PROMPT},
             {"role": "user", "content": user_content},
         ],
     )
-    return _extract_code_block(response.choices[0].message.content)
+    return extract_code_block(response.choices[0].message.content)

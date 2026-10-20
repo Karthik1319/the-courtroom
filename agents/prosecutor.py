@@ -1,9 +1,9 @@
 # Prosecutor agent: finds injection/auth bugs in Python code,
 # searches Tavily for real-world precedent, writes an exploit/test.
 
-import re
 import config
 import tools.search as search_tool
+from tools.parsing import extract_code_block
 
 client = config.get_client(config.MODEL_PROSECUTOR)
 
@@ -92,11 +92,6 @@ def analyze(source_code: str) -> str:
     return response.choices[0].message.content
 
 
-def _extract_code_block(text: str) -> str:
-    match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
-    return match.group(1).strip() if match else text.strip()
-
-
 def write_attack(current_code: str, brief: str) -> list[str]:
     """Produce candidate exploit scripts for one round of the Courtroom loop.
 
@@ -143,12 +138,13 @@ Respond with ONLY ONE fenced Python code block containing your exploit script, a
     
     response = client.chat.completions.create(
         model=config.MODEL_PROSECUTOR,
+        max_tokens=config.MAX_OUTPUT_TOKENS,
         messages=[
             {"role": "system", "content": prompt},
             {"role": "user", "content": user_content},
         ],
     )
-    
-    attack_script = _extract_code_block(response.choices[0].message.content)
-    
+
+    attack_script = extract_code_block(response.choices[0].message.content)
+
     return [attack_script]

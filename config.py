@@ -21,6 +21,12 @@ MODEL_PROSECUTOR = "nvidia/nemotron-3-super-120b-a12b"
 MODEL_DEFENSE = "nvidia/nemotron-3-super-120b-a12b"
 MODEL_FORMATTER = "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B"
 
+# Ceiling on tokens a single agent call may emit. Nemotron reasoning models
+# spend output tokens on visible reasoning, so this caps runaway cost. It is a
+# safety ceiling, not a target — raise it if real runs show replies truncated
+# before the final code block.
+MAX_OUTPUT_TOKENS = 4096
+
 # Which base URL each model needs.
 MODEL_BASE_URL = {
     MODEL_JUDGE: NEBIUS_BASE_URL_REGIONAL,
