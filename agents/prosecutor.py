@@ -1,6 +1,7 @@
 # Prosecutor agent: finds injection/auth bugs in Python code,
 # searches Tavily for real-world precedent, writes an exploit/test.
 
+import re
 import config
 import tools.search as search_tool
 
@@ -91,6 +92,11 @@ def analyze(source_code: str) -> str:
     return response.choices[0].message.content
 
 
+def _extract_code_block(text: str) -> str:
+    match = re.search(r"```(?:python)?\s*\n(.*?)```", text, re.DOTALL)
+    return match.group(1).strip() if match else text.strip()
+
+
 def write_attack(current_code: str, brief: str) -> list[str]:
     """Produce candidate exploit scripts for one round of the Courtroom loop.
 
@@ -117,4 +123,32 @@ def write_attack(current_code: str, brief: str) -> list[str]:
         * Notes may belong to other users, so enumerate ids (the demo app's
           IDOR secret is at note id=2, not id=1).
     """
-    raise NotImplementedError
+    prompt = """You are the Prosecutor in an adversarial code review "trial".
+You are given the current Python source code of the target application. 
+Your goal is to extract a hidden secret flag from the application.
+
+CRITICAL INSTRUCTIONS:
+1. You cannot use `import` statements to read files directly, and you cannot instantiate the app class yourself. 
+2. You MUST interact with the application ONLY using the provided `call(method_name, **kwargs)` function.
+3. Example of a valid script:
+   `print(call("get_note", note_id=1, requesting_user="attacker"))`
+4. The IDOR secret note may belong to other users; you should try enumerating multiple `note_id` values (e.g., 1 through 5).
+5. The Path Traversal secret is located at `../../etc/passwd`.
+6. Read the brief of past attacks to avoid repeating them.
+
+Respond with ONLY ONE fenced Python code block containing your exploit script, and no text outside of it.
+"""
+
+    user_content = f"Current source code:\n\n```python\n{current_code}\n```\n\nContext Brief of known exploits:\n{brief}"
+    
+    response = client.chat.completions.create(
+        model=config.MODEL_PROSECUTOR,
+        messages=[
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": user_content},
+        ],
+    )
+    
+    attack_script = _extract_code_block(response.choices[0].message.content)
+    
+    return [attack_script]
