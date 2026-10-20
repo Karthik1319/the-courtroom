@@ -16,24 +16,37 @@ HEADERS = {
 PYTHON_IMAGE = "tag:python:3.11-slim"
 
 
-def run_python(source_code: str, timeout: int = 30, poll_interval: float = 1.0) -> dict:
+def run_python(
+    source_code: str,
+    timeout: int = 30,
+    poll_interval: float = 1.0,
+    disable_network: bool = False,
+) -> dict:
     """Run `source_code` as a Python script inside a fresh sandbox instance.
+
+    When `disable_network` is True, the instance is spawned with outbound
+    networking turned off (DNS and all egress fail) — use this for attack and
+    patch runs so a script can't reach anything outside the sandbox.
 
     Returns {"exit_code": int, "stdout": str, "stderr": str}.
     Raises RuntimeError if the sandbox doesn't finish within `timeout` seconds.
     """
     stdin_b64 = base64.b64encode(source_code.encode("utf-8")).decode("ascii")
 
+    spawn_body = {
+        "command": "python3",
+        "args": ["-"],
+        "shell": False,
+        "image": PYTHON_IMAGE,
+        "stdin": {"value": stdin_b64, "encoding": "base64", "close": True},
+    }
+    if disable_network:
+        spawn_body["networking"] = {"enabled": False}
+
     spawn_response = requests.post(
         f"{config.SANDBOX_BASE_URL}/instances",
         headers=HEADERS,
-        json={
-            "command": "python3",
-            "args": ["-"],
-            "shell": False,
-            "image": PYTHON_IMAGE,
-            "stdin": {"value": stdin_b64, "encoding": "base64", "close": True},
-        },
+        json=spawn_body,
     )
     spawn_response.raise_for_status()
     operation_path = spawn_response.headers["Location"]
