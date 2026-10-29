@@ -132,7 +132,7 @@ examples/
 
 ## Demo
 
-Demo video: _(YouTube link to be added)_
+Demo video: **https://youtu.be/RG5gz_SeFDk**
 
 ## License
 
