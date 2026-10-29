@@ -10,6 +10,7 @@ import argparse
 import difflib
 
 import courtroom
+import presenter
 from agents import defense, judge, prosecutor
 
 
@@ -113,6 +114,10 @@ def main() -> None:
     parser.add_argument("target", help="path to the Python file on trial")
     parser.add_argument("--behaviour", help="path to a normal-behaviour test script (Round 0)")
     parser.add_argument("--rounds", type=int, default=3, help="max rounds (default 3)")
+    parser.add_argument("--theatrical", action="store_true",
+                        help="render the result with the animated rich presenter (for the demo video)")
+    parser.add_argument("--pace", type=float, default=0.6,
+                        help="seconds between reveals in theatrical mode (default 0.6; 0 = instant)")
     args = parser.parse_args()
 
     source_code = _read(args.target)
@@ -122,19 +127,32 @@ def main() -> None:
     if not behaviour_tests:
         print("(no behaviour test given — Round 0 baseline skipped; pass --behaviour to enable it)")
 
-    result = courtroom.run_case(
-        source_code=source_code,
-        behaviour_tests=behaviour_tests,
-        prosecute=prosecute,
-        defend=defend,
-        max_rounds=args.rounds,
-    )
-    _print_scoreboard(result)
+    def _run_case():
+        return courtroom.run_case(
+            source_code=source_code,
+            behaviour_tests=behaviour_tests,
+            prosecute=prosecute,
+            defend=defend,
+            max_rounds=args.rounds,
+        )
+
+    if args.theatrical:
+        with presenter.console.status(
+            "[bold cyan]Court is in session… the sandbox is deliberating[/bold cyan]"
+        ):
+            result = _run_case()
+    else:
+        result = _run_case()
 
     # Supreme Court only convenes when there is a confirmed vulnerability to rate.
-    if result.exploit_suite:
-        panel = judge.convene(_summarize_case(result))
-        _print_supreme_court(panel)
+    panel = judge.convene(_summarize_case(result)) if result.exploit_suite else None
+
+    if args.theatrical:
+        presenter.present_trial(result, panel, pace=args.pace)
+    else:
+        _print_scoreboard(result)
+        if panel is not None:
+            _print_supreme_court(panel)
 
 
 if __name__ == "__main__":

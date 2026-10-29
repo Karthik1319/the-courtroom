@@ -3,3 +3,4 @@ openai
 tavily-python
 requests
 bandit
+rich
