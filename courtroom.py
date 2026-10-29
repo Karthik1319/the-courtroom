@@ -16,6 +16,13 @@ GUILTY_UNFIXED = "GUILTY_BUT_UNFIXED"   # a working attack had no passing patch
 MAX_ROUNDS = "MAX_ROUNDS"               # rounds exhausted with the code holding
 BASELINE_INVALID = "BASELINE_INVALID"   # behaviour test failed on the original
 
+# Hosted Nemotron models are Mixture-of-Experts and non-deterministic even at
+# temperature 0 (server-side expert routing varies with batching), so a single
+# prosecution attempt can return an ineffective attack against a real bug.
+# Retry the prosecution this many times per round before concluding the code
+# holds — stops a flaky reply from showing up as a false "no vulnerability".
+PROSECUTION_ATTEMPTS = 3
+
 
 @dataclass
 class RoundRecord:
@@ -111,15 +118,19 @@ def run_case(source_code, behaviour_tests, prosecute, defend, max_rounds=3):
         t = harness.Target(name=f"round{n}", source_code=current,
                            behaviour_tests=behaviour_tests)
 
-        attacks = prosecute(current, brief_lines(exploit_suite))
         worked = []
         new_exploits = 0
-        for atk in attacks:
-            if harness.run_attack(t, atk).extracted_flag:
-                worked.append(atk)
-                if atk not in exploit_suite:
-                    exploit_suite.append(atk)
-                    new_exploits += 1
+        attacks = []
+        for _ in range(PROSECUTION_ATTEMPTS):
+            attacks = prosecute(current, brief_lines(exploit_suite))
+            for atk in attacks:
+                if harness.run_attack(t, atk).extracted_flag:
+                    worked.append(atk)
+                    if atk not in exploit_suite:
+                        exploit_suite.append(atk)
+                        new_exploits += 1
+            if worked:
+                break
 
         # Stop: prosecution found nothing that works against the current code.
         if not worked:

@@ -38,7 +38,7 @@ JUDGE_PANEL_MODELS = [MODEL_JUDGE, MODEL_PROSECUTOR, MODEL_FORMATTER]  # Ultra, 
 # spend output tokens on visible reasoning, so this caps runaway cost. It is a
 # safety ceiling, not a target — raise it if real runs show replies truncated
 # before the final code block.
-MAX_OUTPUT_TOKENS = 4096
+MAX_OUTPUT_TOKENS = 8192
 
 # Which base URL each model needs.
 MODEL_BASE_URL = {

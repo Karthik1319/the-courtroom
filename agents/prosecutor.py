@@ -136,15 +136,23 @@ Respond with ONLY ONE fenced Python code block containing your exploit script, a
 
     user_content = f"Current source code:\n\n```python\n{current_code}\n```\n\nContext Brief of known exploits:\n{brief}"
     
-    response = client.chat.completions.create(
-        model=config.MODEL_PROSECUTOR,
-        max_tokens=config.MAX_OUTPUT_TOKENS,
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": user_content},
-        ],
-    )
-
-    attack_script = extract_code_block(response.choices[0].message.content)
+    # Reasoning models occasionally return null/empty content (whole output
+    # budget spent on reasoning). An empty attack would score nothing and can
+    # make a case look falsely "NO VULN FOUND", so retry until we get a
+    # non-empty script or run out of attempts.
+    attack_script = ""
+    for _ in range(3):
+        response = client.chat.completions.create(
+            model=config.MODEL_PROSECUTOR,
+            max_tokens=config.MAX_OUTPUT_TOKENS,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": user_content},
+            ],
+        )
+        attack_script = extract_code_block(response.choices[0].message.content)
+        if attack_script:
+            break
 
     return [attack_script]
