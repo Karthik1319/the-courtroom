@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 import config
+import tools.search as search_tool
 
 client = config.get_client(config.MODEL_JUDGE)
 
@@ -153,3 +154,69 @@ def convene(case_summary: str, models=None) -> "JudgePanel | None":
     dissent = next((o for o in results if o.severity != majority_severity), None)
 
     return JudgePanel(majority_severity, majority_opinion, dissent, results)
+
+
+# --- v2: real-world precedent research (the live Tavily call) ---------------
+# Before the panel rates severity, we name the vulnerability class from the
+# fix diff and pull documented precedent (CVEs, known attack patterns) from
+# Tavily, so severity ratings are grounded in reality, not just model priors.
+# This is the functional runtime Tavily call in the pipeline. It is analytical
+# (reads the defensive diff), not attack generation.
+
+PRECEDENT_QUERY_PROMPT = """You are a security analyst. Given a summary of a
+code vulnerability that was found and fixed (including a before/after diff),
+produce ONE short web-search query (5-12 words) for finding real-world
+precedent — known CVEs or documented attack patterns — for this class of
+vulnerability. Respond with ONLY the query text, nothing else.
+"""
+
+
+def gather_precedent(case_facts: str) -> dict:
+    """Name the vulnerability class and fetch precedent via Tavily.
+
+    Returns {"query", "answer", "sources"}. Degrades to an empty query with no
+    results if the model or Tavily call fails, so the trial never hinges on it.
+    """
+    try:
+        resp = _client_for(config.MODEL_PROSECUTOR).chat.completions.create(
+            model=config.MODEL_PROSECUTOR,
+            max_tokens=config.MAX_OUTPUT_TOKENS,
+            temperature=0,
+            messages=[
+                {"role": "system", "content": PRECEDENT_QUERY_PROMPT},
+                {"role": "user", "content": case_facts},
+            ],
+        )
+        content = resp.choices[0].message.content or ""
+        # Reasoning models may prepend reasoning before the answer, so take the
+        # final non-empty line as the query and strip any quotes/backticks.
+        lines = [ln.strip() for ln in content.splitlines() if ln.strip()]
+        query = lines[-1].strip("`\"' ")[:120] if lines else ""
+    except Exception:
+        query = ""
+
+    if not query:
+        return {"query": "", "answer": None, "sources": []}
+
+    try:
+        result = search_tool.search(query)
+    except Exception:
+        return {"query": query, "answer": None, "sources": []}
+
+    return {
+        "query": query,
+        "answer": result.get("answer"),
+        "sources": result.get("results", []),
+    }
+
+
+def format_precedent(precedent: dict) -> str:
+    """Render a precedent dict as a text block for the judges' case summary."""
+    if not precedent or not precedent.get("query"):
+        return ""
+    lines = [f"Real-world precedent (web search: {precedent['query']}):"]
+    if precedent.get("answer"):
+        lines.append(precedent["answer"])
+    for s in (precedent.get("sources") or [])[:3]:
+        lines.append(f"- {s.get('title', '')}: {s.get('url', '')}")
+    return "\n".join(lines)

@@ -40,7 +40,7 @@ def _pause(pace: float) -> None:
         time.sleep(pace)
 
 
-def present_trial(result, panel=None, pace: float = 0.6) -> None:
+def present_trial(result, panel=None, precedent=None, pace: float = 0.6) -> None:
     """Render a completed case theatrically. `pace` = seconds between reveals."""
     console.print()
     console.rule("[bold cyan]⚖  THE COURTROOM: APPEALS  ⚖[/bold cyan]", style="cyan")
@@ -72,6 +72,10 @@ def present_trial(result, panel=None, pace: float = 0.6) -> None:
         border_style=style,
         box=box.DOUBLE,
     ))
+
+    if precedent and precedent.get("query"):
+        _pause(pace)
+        _present_precedent(precedent)
 
     if panel is not None:
         _pause(pace)
@@ -107,3 +111,16 @@ def _present_panel(panel, pace: float) -> None:
         s_style = _SEVERITY_STYLE.get(o.severity, "white")
         votes.add_row(o.model, f"[{s_style}]{o.severity}[/{s_style}]")
     console.print(votes)
+
+
+def _present_precedent(precedent) -> None:
+    body = []
+    if precedent.get("answer"):
+        body.append(precedent["answer"])
+    for s in (precedent.get("sources") or [])[:3]:
+        body.append(f"[dim]•[/dim] {s.get('title', '')} — {s.get('url', '')}")
+    console.print(Panel(
+        "\n".join(body) if body else "(no precedent returned)",
+        title=f"Real-world precedent via Tavily — query: {precedent.get('query', '')}",
+        border_style="blue",
+    ))

@@ -89,6 +89,19 @@ def _print_supreme_court(panel) -> None:
     print("=" * 64)
 
 
+def _print_precedent(precedent) -> None:
+    print()
+    print("=" * 64)
+    print(" REAL-WORLD PRECEDENT (via Tavily)")
+    print("=" * 64)
+    print(f"query  : {precedent.get('query', '')}")
+    if precedent.get("answer"):
+        print(f"summary: {precedent['answer']}")
+    for s in (precedent.get("sources") or [])[:3]:
+        print(f"  - {s.get('title', '')}: {s.get('url', '')}")
+    print("=" * 64)
+
+
 def _print_scoreboard(result: courtroom.CaseResult) -> None:
     print()
     print("=" * 64)
@@ -145,12 +158,24 @@ def main() -> None:
         result = _run_case()
 
     # Supreme Court only convenes when there is a confirmed vulnerability to rate.
-    panel = judge.convene(_summarize_case(result)) if result.exploit_suite else None
+    # Before it does, pull real-world precedent (the live Tavily call) and fold
+    # it into the facts the judges see.
+    panel = None
+    precedent = None
+    if result.exploit_suite:
+        summary = _summarize_case(result)
+        precedent = judge.gather_precedent(summary)
+        precedent_text = judge.format_precedent(precedent)
+        if precedent_text:
+            summary = f"{summary}\n\n{precedent_text}"
+        panel = judge.convene(summary)
 
     if args.theatrical:
-        presenter.present_trial(result, panel, pace=args.pace)
+        presenter.present_trial(result, panel, precedent=precedent, pace=args.pace)
     else:
         _print_scoreboard(result)
+        if precedent and precedent.get("query"):
+            _print_precedent(precedent)
         if panel is not None:
             _print_supreme_court(panel)
 
